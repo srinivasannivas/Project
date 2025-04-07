@@ -9,7 +9,7 @@ app = Flask(__name__)
 
 MODEL_PATH = "flight_delay_model_bz2.pkl"
 GOOGLE_DRIVE_FILE_ID = "1hsP79tcdDgTGqUjpsxYP6Tva9MvRr-tT"
-MODEL_URL = f"https://drive.google.com/uc?id=1hsP79tcdDgTGqUjpsxYP6Tva9MvRr-tT"
+MODEL_URL = f"https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}"
 
 # Download the model if not present
 if not os.path.exists(MODEL_PATH):
@@ -62,5 +62,7 @@ def predict():
         print("Prediction error:", e)
         return jsonify({"error": str(e)}), 500
 
+# ✅ This part is required for Render or Railway to work properly!
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
