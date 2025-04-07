@@ -7,7 +7,7 @@ import requests
 app = Flask(__name__)
 
 # Load model from Dropbox
-DROPBOX_URL = "https://www.dropbox.com/scl/fi/ahiiokg2y8uwczv64oa64/flight_delay_model_bz2.pkl?rlkey=35812h2miic23dqi3tadwvvzu&st=2xmdb5qf&raw=1"
+DROPBOX_URL = "https://drive.google.com/file/d/1hsP79tcdDgTGqUjpsxYP6Tva9MvRr-tT/view?usp=sharing"
 
 try:
     response = requests.get(DROPBOX_URL)
