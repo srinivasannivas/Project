@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Flight Delay Predictor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 2rem;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f9fafb;
+      color: #111;
+    }
+    h2 {
+      text-align: center;
+      font-size: 2rem;
+      margin-bottom: 2rem;
+    }
+    .grid-container {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 2rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 2rem;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+    .card h3 { margin-top: 0; font-size: 1.25rem; }
+    .card small { color: #666; display: block; margin-bottom: 1.5rem; }
+    label { font-weight: 600; margin-bottom: 0.4rem; }
+    select, input[type="date"] {
+      width: 100%;
+      padding: 0.6rem;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      font-size: 1rem;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem 2rem;
+    }
+    .form-group { display: flex; flex-direction: column; }
+    .full-width { grid-column: span 2; }
+    button[type="submit"] {
+      margin-top: 2rem;
+      width: 100%;
+      padding: 0.8rem;
+      background: #111;
+      color: white;
+      font-size: 1rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.3s, transform 0.2s;
+    }
+    button[type="submit"]:hover {
+      background: #333;
+      transform: scale(1.02);
+    }
+    .stats {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+    .stat-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 1.5rem;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+    .stat-card h4 { font-size: 1.2rem; margin-bottom: 0.5rem; }
+    .stat-value { font-size: 1.75rem; font-weight: 700; }
+    .stat-change { font-size: 0.9rem; margin-top: 0.25rem; }
+    .stat-up { color: red; }
+    .stat-down { color: green; }
+
+    .prediction-output {
+      max-width: 700px;
+      margin: 3rem auto 1rem auto;
+      background: #fff;
+      border-radius: 12px;
+      padding: 2rem;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      text-align: center;
+    }
+    .prediction-output h3 {
+      margin-top: 0;
+      font-size: 1.5rem;
+    }
+    .prediction-output .bar-wrapper {
+      margin: 1.5rem 0 0.75rem;
+    }
+    .bar-container {
+      height: 20px;
+      width: 100%;
+      border-radius: 10px;
+      overflow: hidden;
+      display: flex;
+      border: 1px solid #ddd;
+    }
+    .bar-filled {
+      height: 100%;
+    }
+    .prediction-meta {
+      margin-top: 0.6rem;
+      font-weight: 600;
+    }
+    .prediction-meta span {
+      font-weight: 700;
+    }
+    .contributing-factors {
+      margin-top: 2rem;
+      text-align: left;
+    }
+    .contributing-factors h4 {
+      margin-bottom: 0.5rem;
+      font-size: 1.1rem;
+    }
+    .contributing-factors ul {
+      padding-left: 1.2rem;
+      margin: 0;
+    }
+    @media (max-width: 900px) {
+      .grid-container { grid-template-columns: 1fr; }
+      .stats { flex-direction: row; flex-wrap: wrap; gap: 1rem; }
+      .stat-card { flex: 1 1 30%; }
+      .form-grid { grid-template-columns: 1fr; }
+      .full-width { grid-column: span 1; }
+    }
+  </style>
+</head>
+<body>
+  <h2>Flight Delay Prediction</h2>
+  <div class="grid-container">
+    <div class="card">
+      <h3>Flight Information</h3>
+      <small>Enter your flight details to predict potential delays.</small>
+      <form action="/predict" method="post">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="carrier">Airline</label>
+            <select name="carrier" required>
+              <option value="" disabled selected>Select airline</option>
+              <option value="0">Delta</option>
+              <option value="1">United</option>
+              <option value="2">American</option>
+              <option value="3">Southwest</option>
+              <option value="4">JetBlue</option>
+              <option value="5">Alaska</option>
+              <option value="6">Spirit</option>
+              <option value="7">Frontier</option>
+              <option value="8">Hawaiian</option>
+              <option value="9">Allegiant</option>
+              <option value="10">Envoy Air</option>
+              <option value="11">SkyWest</option>
+              <option value="12">Republic</option>
+              <option value="13">Mesa</option>
+              <option value="14">Sun Country</option>
+              <option value="15">Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="crs_dep_time">Departure Time</label>
+            <select name="crs_dep_time" required>
+              <option value="" disabled selected>Select time</option>
+              {% for i in range(0, 24) %}
+              <option value="{{ i }}">{{ i }}:00</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="origin">Origin Airport</label>
+            <select name="origin" id="origin" required>
+              <option value="" disabled selected>Select origin</option>
+              <option value="0">New York</option>
+              <option value="1">Atlanta</option>
+              <option value="2">Los Angeles</option>
+              <option value="3">Chicago</option>
+              <option value="4">Dallas</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="destination">Destination Airport</label>
+            <select name="destination" id="destination" required>
+              <option value="" disabled selected>Select destination</option>
+              <option value="0">New York</option>
+              <option value="1">Atlanta</option>
+              <option value="2">Los Angeles</option>
+              <option value="3">Chicago</option>
+              <option value="4">Dallas</option>
+            </select>
+          </div>
+          <div class="form-group full-width">
+            <label for="flight_date">Departure Date</label>
+            <input type="date" name="flight_date" required>
+          </div>
+        </div>
+        <button type="submit">✈️ Predict Delay</button>
+      </form>
+    </div>
+    <div class="stats">
+      <div class="stat-card">
+        <h4>Average Delay</h4>
+        <div class="stat-value">24 min</div>
+        <div class="stat-change stat-up">+5.2% from last month</div>
+      </div>
+      <div class="stat-card">
+        <h4>Delay Probability</h4>
+        <div class="stat-value">32%</div>
+        <div class="stat-change stat-down">-2.1% from last month</div>
+      </div>
+      <div class="stat-card">
+        <h4>Flights Analyzed</h4>
+        <div class="stat-value">12,458</div>
+        <div class="stat-change stat-up">+12.5% from last month</div>
+      </div>
+    </div>
+  </div>
+
+  {% if prediction_text %}
+  <div class="prediction-output">
+    <h3>Predicted Delay</h3>
+    <small>Generated on {{ timestamp }}</small>
+    <div style="margin-top: 1rem; font-size: 1.6rem; font-weight: 700;">
+      {{ prediction_text }}
+    </div>
+    <div class="bar-wrapper">
+      <div class="bar-container">
+        <div class="bar-filled"
+          style="width: {{ probability }}%; background-color: {% if delay_category == 'Low' %}#4CAF50{% elif delay_category == 'Medium' %}#FFC107{% else %}#F44336{% endif %};">
+        </div>
+        <div class="bar-filled"
+          style="width: {{ 100 - probability }}%; background-color: #000;">
+        </div>
+      </div>
+      <div class="prediction-meta">
+        Category:
+        <span
+          style="color: {% if delay_category == 'Low' %}#4CAF50{% elif delay_category == 'Medium' %}#FFC107{% else %}#F44336{% endif %};">
+          {{ delay_category }}
+        </span>
+        &nbsp;|&nbsp;
+        Probability: <strong>{{ probability }}%</strong>
+      </div>
+    </div>
+    
+    
+    <div class="contributing-factors">
+      <h4>Contributing Factors:</h4>
+      <ul>
+        {% for factor in contributing_factors %}
+        <li>{{ factor }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+{% endif %}
+
+
+  <script>
+    function updateAirportOptions() {
+      const origin = document.getElementById("origin");
+      const destination = document.getElementById("destination");
+      const selectedOrigin = origin.value;
+      const selectedDestination = destination.value;
+      for (let option of destination.options) {
+        option.disabled = option.value !== "" && option.value === selectedOrigin;
+      }
+      for (let option of origin.options) {
+        option.disabled = option.value !== "" && option.value === selectedDestination;
+      }
+    }
+    window.onload = function () {
+      document.getElementById("origin").addEventListener("change", updateAirportOptions);
+      document.getElementById("destination").addEventListener("change", updateAirportOptions);
+      updateAirportOptions();
+    };
+  </script>
+</body>
+</html>
