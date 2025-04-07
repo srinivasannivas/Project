@@ -1,5 +1,5 @@
-from flask import Flask, render_template, request
-import requests
+from flask import Flask, render_template, request, jsonify
+import gdown
 import os
 import pickle
 import numpy as np
@@ -7,84 +7,60 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-MODEL_URL = "https://drive.google.com/uc?export=download&id=1hsP79tcdDgTGqUjpsxYP6Tva9MvRr-tT"
-MODEL_PATH = "models/flight_delay_model.pkl"
+MODEL_PATH = "flight_delay_model_bz2.pkl"
+GOOGLE_DRIVE_FILE_ID = "1hsP79tcdDgTGqUjpsxYP6Tva9MvRr-tT"
+MODEL_URL = f"https://drive.google.com/uc?id=1hsP79tcdDgTGqUjpsxYP6Tva9MvRr-tT"
 
-# Download model if not exists
-def download_model():
-    if not os.path.exists(MODEL_PATH):
-        print("Downloading model...")
-        os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
-        response = requests.get(MODEL_URL)
-        with open(MODEL_PATH, "wb") as f:
-            f.write(response.content)
-        print("Model downloaded.")
+# Download the model if not present
+if not os.path.exists(MODEL_PATH):
+    print("Model not found. Downloading from Google Drive...")
+    gdown.download(MODEL_URL, MODEL_PATH, quiet=False)
 
-download_model()
-
-# Load model
+# Load the model
 with open(MODEL_PATH, "rb") as f:
     model = pickle.load(f)
 
-# Mapping for display
-CARRIER_MAP = {
-    0: "American Airlines", 1: "Delta", 2: "United", 3: "Southwest", 4: "JetBlue"
-}
-AIRPORT_MAP = {
-    0: "JFK", 1: "LAX", 2: "ORD", 3: "ATL", 4: "DFW"
-}
+# Example label encodings (replace with yours if different)
+carrier_map = {"AA": 0, "DL": 1, "UA": 2}
+origin_map = {"JFK": 0, "LAX": 1, "ORD": 2}
+dest_map = {"ATL": 0, "DFW": 1, "DEN": 2}
 
-@app.route("/", methods=["GET", "POST"])
+@app.route('/')
 def index():
-    prediction = None
-    probability = None
-    category = None
-    color = None
-    timestamp = None
-    contributing_factors = {}
+    return render_template('index.html')
 
-    if request.method == "POST":
-        carrier = int(request.form["carrier"])
-        origin = int(request.form["origin"])
-        destination = int(request.form["destination"])
-        dep_hour = int(request.form["dep_hour"])
+@app.route('/predict', methods=['POST'])
+def predict():
+    try:
+        carrier = request.form.get("carrier")
+        origin = request.form.get("origin")
+        destination = request.form.get("destination")
+        dep_time = request.form.get("departure_time")
 
-        features = np.array([[carrier, origin, destination, dep_hour]])
-        delay_minutes = model.predict(features)[0]
+        dep_minutes = datetime.strptime(dep_time, "%H:%M").hour * 60 + datetime.strptime(dep_time, "%H:%M").minute
 
-        # Convert delay to probability & category
-        if delay_minutes < 15:
-            probability = 0.1
-            category = "On Time"
-            color = "green"
-        elif delay_minutes < 45:
-            probability = 0.5
-            category = "Minor Delay"
-            color = "yellow"
-        else:
-            probability = 0.9
-            category = "Major Delay"
-            color = "red"
+        carrier_val = carrier_map.get(carrier, -1)
+        origin_val = origin_map.get(origin, -1)
+        dest_val = dest_map.get(destination, -1)
 
-        probability_percent = int(probability * 100)
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        if -1 in (carrier_val, origin_val, dest_val):
+            return jsonify({"error": "Invalid input"}), 400
 
-        contributing_factors = {
-            "Carrier": CARRIER_MAP.get(carrier, f"Carrier {carrier}"),
-            "Origin": AIRPORT_MAP.get(origin, f"Airport {origin}"),
-            "Destination": AIRPORT_MAP.get(destination, f"Airport {destination}"),
-            "Departure Hour": f"{dep_hour}:00"
-        }
+        features = np.array([[carrier_val, origin_val, dest_val, dep_minutes]])
+        predicted_delay = model.predict(features)[0]
 
-        return render_template("index.html",
-                               prediction=True,
-                               probability=probability_percent,
-                               category=category,
-                               color=color,
-                               timestamp=timestamp,
-                               contributing_factors=contributing_factors)
+        probability = min(max(predicted_delay / 120, 0), 1)
+        category = "Low" if probability < 0.33 else "Medium" if probability < 0.66 else "High"
 
-    return render_template("index.html", prediction=False)
+        return jsonify({
+            "probability": round(probability * 100, 2),
+            "category": category,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        })
+
+    except Exception as e:
+        print("Prediction error:", e)
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)
