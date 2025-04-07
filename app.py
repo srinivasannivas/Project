@@ -3,18 +3,28 @@ import numpy as np
 import pickle
 from datetime import datetime
 import requests
+import os
 
 app = Flask(__name__)
 
-# Load model from Dropbox
-DROPBOX_URL = "https://drive.google.com/file/d/1hsP79tcdDgTGqUjpsxYP6Tva9MvRr-tT/view?usp=sharing"
+# Load model from Google Drive
+GDRIVE_FILE_ID = "1hsP79tcdDgTGqUjpsxYP6Tva9MvRr-tT"
+DOWNLOAD_URL = f"https://drive.google.com/uc?export=download&id={GDRIVE_FILE_ID}"
+MODEL_PATH = "flight_delay_model_bz2.pkl"
 
 try:
-    response = requests.get(DROPBOX_URL)
-    response.raise_for_status()
-    model = pickle.loads(response.content)
+    if not os.path.exists(MODEL_PATH):
+        print("Downloading model from Google Drive...")
+        response = requests.get(DOWNLOAD_URL)
+        response.raise_for_status()
+        with open(MODEL_PATH, "wb") as f:
+            f.write(response.content)
+
+    with open(MODEL_PATH, "rb") as f:
+        model = pickle.load(f)
+
 except Exception as e:
-    raise RuntimeError(f"Failed to load model from Dropbox: {e}")
+    raise RuntimeError(f"Failed to load model from Google Drive: {e}")
 
 @app.route("/")
 def home():
@@ -53,15 +63,17 @@ def predict():
         # Compute delay probability (mock logic)
         probability = min(int((prediction_minutes / 60) * 100), 100)
 
-        # Placeholder contributing factors (could be improved with feature importance)
+        # Placeholder contributing factors
         contributing_factors = ["Weather", "Air Traffic", "Airline History"]
 
-        return render_template("index.html",
-                               prediction_text=f"Estimated delay: {prediction_minutes} minutes",
-                               delay_category=delay_category,
-                               probability=probability,
-                               timestamp=datetime.now().strftime("%I:%M:%S %p"),
-                               contributing_factors=contributing_factors)
+        return render_template(
+            "index.html",
+            prediction_text=f"Estimated delay: {prediction_minutes} minutes",
+            delay_category=delay_category,
+            probability=probability,
+            timestamp=datetime.now().strftime("%I:%M:%S %p"),
+            contributing_factors=contributing_factors
+        )
     except Exception as e:
         return render_template("index.html", error=f"Error: {str(e)}")
 
