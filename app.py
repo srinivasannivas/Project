@@ -1,81 +1,78 @@
-from flask import Flask, render_template, request
-import numpy as np
+from flask import Flask, render_template, request, jsonify
 import pickle
-from datetime import datetime
 import requests
+import io
 import os
+from datetime import datetime
 
 app = Flask(__name__)
 
-# Load model from Google Drive
-GDRIVE_FILE_ID = "1hsP79tcdDgTGqUjpsxYP6Tva9MvRr-tT"
-DOWNLOAD_URL = f"https://drive.google.com/uc?export=download&id={GDRIVE_FILE_ID}"
-MODEL_PATH = "flight_delay_model_bz2.pkl"
+# Your Google Drive file ID
+MODEL_FILE_ID = "1hsP79tcdDgTGqUjpsxYP6Tva9MvRr-tT"
 
-try:
-    if not os.path.exists(MODEL_PATH):
-        print("Downloading model from Google Drive...")
-        response = requests.get(DOWNLOAD_URL)
-        response.raise_for_status()
-        with open(MODEL_PATH, "wb") as f:
-            f.write(response.content)
+def download_model():
+    print("Downloading model from Google Drive...")
+    url = f"https://drive.google.com/uc?export=download&id={MODEL_FILE_ID}"
+    response = requests.get(url)
 
-    with open(MODEL_PATH, "rb") as f:
-        model = pickle.load(f)
+    content_type = response.headers.get("Content-Type", "")
+    if "html" in content_type:
+        raise ValueError("Google Drive returned an HTML page instead of the model file. Make sure the file is public.")
 
-except Exception as e:
-    raise RuntimeError(f"Failed to load model from Google Drive: {e}")
+    try:
+        model = pickle.load(io.BytesIO(response.content))
+        print("Model loaded successfully.")
+        return model
+    except Exception as e:
+        raise RuntimeError(f"Failed to load model from Google Drive: {e}")
 
-@app.route("/")
-def home():
-    return render_template("index.html")
+# Load the model once at startup
+model = download_model()
 
-@app.route("/predict", methods=["POST"])
+# Sample feature names for dummy inputs — adjust as needed
+feature_names = ['carrier', 'origin', 'dest', 'sched_dep_hour']
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/predict', methods=['POST'])
 def predict():
     try:
-        # Retrieve form inputs
-        flight_date = request.form["flight_date"]
-        carrier = int(request.form["carrier"])
-        origin = int(request.form["origin"])
-        destination = int(request.form["destination"])
-        crs_dep_time = int(request.form["crs_dep_time"])
+        data = request.json
 
-        # Parse flight date
-        flight_datetime = datetime.strptime(flight_date, "%Y-%m-%d")
-        month = flight_datetime.month - 1
-        day = flight_datetime.day - 1
-        weekday = flight_datetime.isoweekday() - 1
+        # Extract input features from request JSON
+        input_data = [
+            data.get('carrier', 0),
+            data.get('origin', 0),
+            data.get('dest', 0),
+            data.get('sched_dep_hour', 0)
+        ]
 
-        # Build feature array
-        features = np.array([[month, day, weekday, carrier, origin, destination, crs_dep_time, 0]])
+        # Run prediction
+        predicted_minutes = model.predict([input_data])[0]
+        delay_probability = min(predicted_minutes / 120, 1.0)  # normalize up to 120 mins
 
-        # Predict delay in minutes
-        prediction_minutes = max(round(model.predict(features)[0], 2), 0)
-
-        # Determine delay category
-        if prediction_minutes < 15:
-            delay_category = "Low"
-        elif prediction_minutes < 45:
-            delay_category = "Medium"
+        # Get delay category
+        if predicted_minutes > 60:
+            delay_category = "High Delay"
+        elif predicted_minutes > 15:
+            delay_category = "Moderate Delay"
         else:
-            delay_category = "High"
+            delay_category = "On Time"
 
-        # Compute delay probability (mock logic)
-        probability = min(int((prediction_minutes / 60) * 100), 100)
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-        # Placeholder contributing factors
-        contributing_factors = ["Weather", "Air Traffic", "Airline History"]
-
-        return render_template(
-            "index.html",
-            prediction_text=f"Estimated delay: {prediction_minutes} minutes",
-            delay_category=delay_category,
-            probability=probability,
-            timestamp=datetime.now().strftime("%I:%M:%S %p"),
-            contributing_factors=contributing_factors
-        )
+        return jsonify({
+            'success': True,
+            'probability': round(delay_probability * 100, 2),
+            'category': delay_category,
+            'predicted_minutes': round(predicted_minutes),
+            'timestamp': timestamp
+        })
     except Exception as e:
-        return render_template("index.html", error=f"Error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)})
 
-if __name__ == "__main__":
-    app.run(debug=True)
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 5000))
+    app.run(debug=True, host='0.0.0.0', port=port)
