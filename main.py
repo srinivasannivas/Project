@@ -14,7 +14,15 @@ MODEL_URL = f"https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}"
 
 if not os.path.exists(MODEL_PATH):
     print("Model not found. Downloading from Google Drive...")
-    gdown.download(MODEL_URL, MODEL_PATH, quiet=False, fuzzy=True, use_cookies=True)
+    gdown.download(id=GOOGLE_DRIVE_FILE_ID, output=MODEL_PATH, quiet=False, use_cookies=False)
+
+    if not os.path.exists(MODEL_PATH):
+    print("Model not found. Downloading from Google Drive...")
+    try:
+        gdown.download(id=GOOGLE_DRIVE_FILE_ID, output=MODEL_PATH, quiet=False, use_cookies=False)
+    except Exception as e:
+        print(f"❌ Download failed: {e}")
+
 
     # Check file size to ensure it downloaded completely (should be ~29.5MB)
     if os.path.getsize(MODEL_PATH) < 5 * 1024 * 1024:  # Less than 5MB? Likely broken
