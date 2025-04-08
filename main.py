@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, jsonify
-import gdown
+import requests
 import os
 import joblib
 import numpy as np
@@ -7,24 +7,30 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-# === Model setup ===
 MODEL_PATH = "flight_delay_model_bz2.pkl"
 GOOGLE_DRIVE_FILE_ID = "1hsP79tcdDgTGqUjpsxYP6Tva9MvRr-tT"
 
-# Always redownload to avoid corruption
+def download_model_from_drive(drive_id, output_path):
+    url = f"https://drive.google.com/uc?export=download&id={drive_id}"
+    with requests.get(url, stream=True) as r:
+        r.raise_for_status()
+        with open(output_path, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+    if os.path.getsize(output_path) < 25 * 1024 * 1024:
+        raise ValueError("❌ Downloaded file is too small. Likely incomplete.")
+
+# Always redownload (or delete if exists)
 if os.path.exists(MODEL_PATH):
     os.remove(MODEL_PATH)
 
-print("🔄 Downloading model from Google Drive...")
-gdown.download(id=GOOGLE_DRIVE_FILE_ID, output=MODEL_PATH, quiet=False, use_cookies=False)
+print("📥 Downloading model from Google Drive...")
+download_model_from_drive(GOOGLE_DRIVE_FILE_ID, MODEL_PATH)
 
-# Validate download
-if not os.path.exists(MODEL_PATH) or os.path.getsize(MODEL_PATH) < 25 * 1024 * 1024:
-    raise ValueError("❌ Downloaded model file is too small or missing.")
-
-# Load model using joblib
 model = joblib.load(MODEL_PATH)
 print("✅ Model loaded successfully")
+
 
 # === Label mappings ===
 carrier_map = {"AA": 0, "DL": 1, "UA": 2}
